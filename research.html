@@ -6,10 +6,6 @@
   <title>Research: Spike Domain Antibody Response</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="referrer" content="no-referrer"/>
-  <style>
-    .card { @apply block bg-white rounded-xl shadow hover:shadow-lg transition p-4; }
-    .muted { @apply text-sm text-gray-600; }
-  </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-white shadow py-6">
@@ -21,13 +17,45 @@
 
   <main class="container mx-auto px-4 py-8">
     <!-- Controls -->
-    <div class="bg-white rounded-xl shadow p-4 mb-6 flex flex-col lg:flex-row gap-3">
-      <input id="query" type="text" class="flex-1 border rounded-lg px-3 py-2"
+    <div class="bg-white rounded-xl shadow p-4 mb-6 grid grid-cols-1 lg:grid-cols-5 gap-3">
+      <input id="query" type="text" class="border rounded-lg px-3 py-2 col-span-2"
              value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
              placeholder="검색어를 입력하세요"/>
+      <select id="journal" class="border rounded-lg px-3 py-2">
+        <option value="">All Journals</option>
+        <option value="(nature[journal] OR science[journal] OR cell[journal])">
+          CNS (Nature · Science · Cell)
+        </option>
+        <option value='("Molecular Cell"[journal]
+                        OR "The Journal of Cell Biology"[journal]
+                        OR "Nature Immunology"[journal]
+                        OR "Immunity"[journal]
+                        OR "Cell Host & Microbe"[journal]
+                        OR "Nature Reviews Molecular Cell Biology"[journal]
+                        OR "Nature Medicine"[journal]
+                        OR PNAS[journal]
+                        OR "Nature Communications"[journal]
+                        OR "Nature Structural & Molecular Biology"[journal]
+                        OR "Science Translational Medicine"[journal])'>
+          Hi (Mol Cell · J Cell Biol · Nat Immunology · Immunity · Cell Host & Microbe ·
+          Nat Rev Mol Cell Biol · Nat Med · PNAS · Nat Commun · Nat Struct Mol Biol · Sci Transl Med)
+        </option>
+        <option value="biorxiv[source]">bioRxiv</option>
+      </select>
+      <select id="dateRange" class="border rounded-lg px-3 py-2">
+        <option value="">Any Time</option>
+        <option value="1y">Last 1 year</option>
+        <option value="3y">Last 3 years</option>
+        <option value="5y">Last 5 years</option>
+        <option value="custom">Custom Range</option>
+      </select>
+      <div class="flex gap-1">
+        <input type="date" id="startDate" class="border rounded-lg px-2 py-1 hidden">
+        <input type="date" id="endDate" class="border rounded-lg px-2 py-1 hidden">
+      </div>
       <select id="sort" class="border rounded-lg px-3 py-2">
-        <option value="most+recent" selected>Most Recent (PubMed)</option>
-        <option value="relevance">Relevance (PubMed)</option>
+        <option value="most+recent" selected>Most Recent</option>
+        <option value="relevance">Relevance</option>
       </select>
       <button id="run" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Search</button>
     </div>
@@ -55,8 +83,43 @@
 
   <script>
     const updated = document.getElementById('updated');
-    function setUpdated() { updated.textContent = `Last updated: ${new Date().toLocaleString()}`; }
-    function getQuery() { return document.getElementById('query').value.trim(); }
+    const dateRangeSel = document.getElementById('dateRange');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+
+    dateRangeSel.addEventListener('change', () => {
+      if (dateRangeSel.value === 'custom') {
+        startDateInput.classList.remove('hidden');
+        endDateInput.classList.remove('hidden');
+      } else {
+        startDateInput.classList.add('hidden');
+        endDateInput.classList.add('hidden');
+      }
+    });
+
+    function setUpdated() {
+      updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
+    }
+    function getQuery() {
+      const baseQuery = document.getElementById('query').value.trim();
+      const journalFilter = document.getElementById('journal').value;
+      return journalFilter ? `${baseQuery} AND ${journalFilter}` : baseQuery;
+    }
+    function getDateParams() {
+      const today = new Date();
+      let mindate = '', maxdate = '';
+      if (dateRangeSel.value === '1y') {
+        mindate = `${today.getFullYear()-1}/01/01`;
+      } else if (dateRangeSel.value === '3y') {
+        mindate = `${today.getFullYear()-3}/01/01`;
+      } else if (dateRangeSel.value === '5y') {
+        mindate = `${today.getFullYear()-5}/01/01`;
+      } else if (dateRangeSel.value === 'custom') {
+        mindate = startDateInput.value;
+        maxdate = endDateInput.value;
+      }
+      return { mindate, maxdate };
+    }
 
     const pubmedDiv = document.getElementById('pubmed');
     const moreBtnWrap = document.getElementById('pubmedMore');
@@ -64,13 +127,18 @@
     let retstart = 0, retmax = 20, lastQuery = '', lastSort = 'most+recent';
 
     async function fetchPubMed(query, sort='most+recent', append=false) {
+      const { mindate, maxdate } = getDateParams();
+      const dateParams = mindate ? `&mindate=${mindate}${maxdate ? `&maxdate=${maxdate}` : ''}` : '';
       const term = encodeURIComponent(query);
-      const esearch = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=${retmax}&retstart=${retstart}&sort=${sort}&term=${term}`;
+      const esearch = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=${retmax}&retstart=${retstart}&sort=${sort}${dateParams}&term=${term}`;
       const e1 = await fetch(esearch).then(r=>r.json()).catch(()=>null);
       const ids = (e1 && e1.esearchresult && e1.esearchresult.idlist) || [];
       if (!append) pubmedDiv.innerHTML = '';
       moreBtnWrap.classList.toggle('hidden', ids.length < retmax);
-      if (ids.length === 0) { if (!append) pubmedDiv.innerHTML = `<div class='text-gray-500'>No results.</div>`; return; }
+      if (ids.length === 0) {
+        if (!append) pubmedDiv.innerHTML = `<div class="text-gray-500">No results.</div>`;
+        return;
+      }
 
       const idStr = ids.join(',');
       const esummary = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=${idStr}`;
@@ -85,12 +153,16 @@
         const pmid = it.uid;
         const link = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
         const card = document.createElement('a');
-        card.href = link; card.target = '_blank'; card.rel = 'noopener'; card.className = 'card';
+        card.href = link;
+        card.target = '_blank';
+        card.rel = 'noopener';
+        card.className = 'block bg-white rounded-xl shadow hover:shadow-lg transition p-4';
         card.innerHTML = `
-          <div class='text-lg font-semibold text-gray-800 mb-1'>${title}</div>
-          <div class='muted'>${journal} · ${date}</div>
-          <div class='muted truncate'>${authors}</div>
-          <div class='mt-2 text-blue-600 text-sm'>PMID: ${pmid}</div>`;
+          <div class="text-lg font-semibold text-gray-800 mb-1">${title}</div>
+          <div class="text-sm text-gray-600">${journal} · ${date}</div>
+          <div class="text-sm text-gray-600 truncate">${authors}</div>
+          <div class="mt-2 text-blue-600 text-sm">PMID: ${pmid}</div>
+        `;
         pubmedDiv.appendChild(card);
       });
     }
@@ -102,7 +174,10 @@
       fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
     });
 
-    moreBtn.addEventListener('click', () => { retstart += retmax; fetchPubMed(lastQuery, lastSort, true).then(setUpdated); });
+    moreBtn.addEventListener('click', () => {
+      retstart += retmax;
+      fetchPubMed(lastQuery, lastSort, true).then(setUpdated);
+    });
 
     (function init(){
       lastQuery = getQuery();
