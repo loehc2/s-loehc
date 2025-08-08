@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Research: Spike Domain Antibody Response</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    .card { @apply block bg-white rounded-xl shadow hover:shadow-lg transition p-4; }
+    .muted { @apply text-sm text-gray-600; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-white shadow py-6">
+    <div class="container mx-auto px-4 flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-800">Spike Domain Antibody Response – Papers</h1>
+      <a href="./index.html" class="text-blue-600 hover:underline">← Back</a>
+    </div>
+  </header>
+
+  <main class="container mx-auto px-4 py-8">
+    <!-- Controls -->
+    <div class="bg-white rounded-xl shadow p-4 mb-6 flex flex-col lg:flex-row gap-3">
+      <input id="query" type="text" class="flex-1 border rounded-lg px-3 py-2"
+             value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
+             placeholder="검색어를 입력하세요"/>
+      <select id="sort" class="border rounded-lg px-3 py-2">
+        <option value="most+recent" selected>Most Recent (PubMed)</option>
+        <option value="relevance">Relevance (PubMed)</option>
+      </select>
+      <button id="run" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Search</button>
+    </div>
+
+    <p id="updated" class="text-sm text-gray-500 mb-6"></p>
+
+    <!-- PubMed Results -->
+    <section class="mb-12">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-gray-800">PubMed</h2>
+        <div class="text-sm text-gray-500">자동 로드됨</div>
+      </div>
+      <div id="pubmed" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <div id="pubmedMore" class="mt-4 text-center hidden">
+        <button id="loadMorePubmed" class="px-4 py-2 rounded-lg border">Load more</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-gray-800 text-white py-6 mt-12">
+    <div class="container mx-auto px-4 text-center">
+      <p>&copy; 2025 SuncheolP</p>
+    </div>
+  </footer>
+
+  <script>
+    const updated = document.getElementById('updated');
+    function setUpdated() { updated.textContent = `Last updated: ${new Date().toLocaleString()}`; }
+    function getQuery() { return document.getElementById('query').value.trim(); }
+
+    const pubmedDiv = document.getElementById('pubmed');
+    const moreBtnWrap = document.getElementById('pubmedMore');
+    const moreBtn = document.getElementById('loadMorePubmed');
+    let retstart = 0, retmax = 20, lastQuery = '', lastSort = 'most+recent';
+
+    async function fetchPubMed(query, sort='most+recent', append=false) {
+      const term = encodeURIComponent(query);
+      const esearch = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=${retmax}&retstart=${retstart}&sort=${sort}&term=${term}`;
+      const e1 = await fetch(esearch).then(r=>r.json()).catch(()=>null);
+      const ids = (e1 && e1.esearchresult && e1.esearchresult.idlist) || [];
+      if (!append) pubmedDiv.innerHTML = '';
+      moreBtnWrap.classList.toggle('hidden', ids.length < retmax);
+      if (ids.length === 0) { if (!append) pubmedDiv.innerHTML = `<div class='text-gray-500'>No results.</div>`; return; }
+
+      const idStr = ids.join(',');
+      const esummary = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=${idStr}`;
+      const e2 = await fetch(esummary).then(r=>r.json()).catch(()=>null);
+      const result = e2 && e2.result ? e2.result : {};
+      ids.forEach(id => {
+        const it = result[id]; if (!it) return;
+        const title = it.title || '(no title)';
+        const journal = it.fulljournalname || it.source || '';
+        const date = it.pubdate || it.epubdate || '';
+        const authors = (it.authors||[]).map(a=>a.name).join(', ');
+        const pmid = it.uid;
+        const link = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
+        const card = document.createElement('a');
+        card.href = link; card.target = '_blank'; card.rel = 'noopener'; card.className = 'card';
+        card.innerHTML = `
+          <div class='text-lg font-semibold text-gray-800 mb-1'>${title}</div>
+          <div class='muted'>${journal} · ${date}</div>
+          <div class='muted truncate'>${authors}</div>
+          <div class='mt-2 text-blue-600 text-sm'>PMID: ${pmid}</div>`;
+        pubmedDiv.appendChild(card);
+      });
+    }
+
+    document.getElementById('run').addEventListener('click', () => {
+      retstart = 0;
+      lastQuery = getQuery();
+      lastSort = document.getElementById('sort').value;
+      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+    });
+
+    moreBtn.addEventListener('click', () => { retstart += retmax; fetchPubMed(lastQuery, lastSort, true).then(setUpdated); });
+
+    (function init(){
+      lastQuery = getQuery();
+      lastSort  = document.getElementById('sort').value;
+      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+    })();
+  </script>
+</body>
+</html>
