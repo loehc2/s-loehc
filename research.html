@@ -6,6 +6,9 @@
   <title>Paper Search</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="referrer" content="no-referrer"/>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-white shadow py-6">
@@ -103,6 +106,55 @@
   </footer>
 
   <script>
+    // Firebase 설정 (saved.html과 동일한 설정 사용)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYvtzLp2CaeMk14navRx9Sgum_J5rZsHo",
+      authDomain: "fir-loehc-papers.firebaseapp.com",
+      databaseURL: "https://fir-loehc-papers-default-rtdb.firebaseio.com",
+      projectId: "fir-loehc-papers",
+      storageBucket: "fir-loehc-papers.firebasestorage.app",
+      messagingSenderId: "273353748384",
+      appId: "1:273353748384:web:47aac0f88c3c666c56bec5",
+      measurementId: "G-XKVJH93TKJ"
+    };
+
+    let firebaseInitialized = false;
+    let database = null;
+
+    // Firebase 초기화
+    function initFirebase() {
+      if (!firebaseConfig.apiKey) {
+        console.log('Firebase not configured. Using localStorage only.');
+        return false;
+      }
+
+      try {
+        firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        firebaseInitialized = true;
+        console.log('Firebase initialized successfully');
+        return true;
+      } catch (error) {
+        console.error('Firebase initialization error:', error);
+        return false;
+      }
+    }
+
+    // Firebase에 데이터 저장
+    function saveToFirebase(papers) {
+      if (!firebaseInitialized) return;
+      
+      try {
+        database.ref('papers').set(papers).then(() => {
+          console.log('Saved to Firebase');
+        }).catch((error) => {
+          console.error('Firebase save error:', error);
+        });
+      } catch (error) {
+        console.error('Firebase save error:', error);
+      }
+    }
+
     const updated = document.getElementById('updated');
     const dateRangeSel = document.getElementById('dateRange');
     const startDateInput = document.getElementById('startDate');
@@ -240,6 +292,10 @@
           savedAt: new Date().toISOString()
         });
         localStorage.setItem('savedPapers', JSON.stringify(saved));
+        // Firebase에도 저장
+        if (firebaseInitialized) {
+          saveToFirebase(saved);
+        }
         return true;
       }
       return false;
@@ -399,6 +455,9 @@
     });
 
     (function init(){
+      // Firebase 초기화
+      initFirebase();
+      
       lastQuery = getQuery();
       lastSort  = document.getElementById('sort').value;
       fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
