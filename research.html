@@ -63,6 +63,22 @@
 
     <p id="updated" class="text-sm text-gray-500 mb-6"></p>
 
+    <!-- DOI Search -->
+    <section class="mb-12">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-gray-800">DOI Search</h2>
+        <a href="saved.html" class="text-blue-600 hover:underline text-sm">Saved Papers</a>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4 mb-4">
+        <div class="flex gap-2">
+          <input id="doiInput" type="text" class="flex-1 border rounded-lg px-3 py-2"
+                 placeholder="Enter DOI (e.g., 10.1038/nature12373)"/>
+          <button id="searchDOI" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Search</button>
+        </div>
+      </div>
+      <div id="doiResults" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </section>
+
     <!-- PubMed Results -->
     <section class="mb-12">
       <div class="flex items-center justify-between mb-3">
@@ -251,6 +267,134 @@
         alert(`${savedCount} paper${savedCount !== 1 ? 's' : ''} saved.`);
       } else {
         alert('Papers already saved.');
+      }
+    });
+
+    // DOI Search functionality
+    const doiInput = document.getElementById('doiInput');
+    const searchDOIBtn = document.getElementById('searchDOI');
+    const doiResults = document.getElementById('doiResults');
+
+    async function searchDOI(doi) {
+      if (!doi || !doi.trim()) {
+        alert('Please enter a DOI');
+        return;
+      }
+
+      // Clean DOI (remove https://doi.org/ prefix if present)
+      let cleanDOI = doi.trim();
+      if (cleanDOI.startsWith('http')) {
+        cleanDOI = cleanDOI.split('doi.org/')[1] || cleanDOI;
+      }
+      if (cleanDOI.startsWith('doi:')) {
+        cleanDOI = cleanDOI.replace('doi:', '');
+      }
+
+      doiResults.innerHTML = '<div class="text-gray-500">Searching...</div>';
+
+      try {
+        // Crossref API
+        const response = await fetch(`https://api.crossref.org/works/${encodeURIComponent(cleanDOI)}`);
+        if (!response.ok) {
+          throw new Error('DOI not found');
+        }
+
+        const data = await response.json();
+        const work = data.message;
+
+        if (!work) {
+          throw new Error('DOI not found');
+        }
+
+        // Extract information
+        const title = work.title ? work.title[0] : 'No title';
+        const authors = work.author ? work.author.map(a => {
+          const given = a.given || '';
+          const family = a.family || '';
+          return `${given} ${family}`.trim();
+        }).filter(Boolean).join(', ') : 'Unknown authors';
+        const journal = work['container-title'] ? work['container-title'][0] : '';
+        const date = work.published ? 
+          `${work.published['date-parts'][0][0]}-${String(work.published['date-parts'][0][1] || '').padStart(2, '0')}-${String(work.published['date-parts'][0][2] || '').padStart(2, '0')}` : 
+          '';
+        const doiLink = `https://doi.org/${work.DOI}`;
+        const pmid = work.pmid || '';
+
+        // Create card
+        const card = document.createElement('div');
+        card.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
+        card.innerHTML = `
+          <div class="absolute top-3 right-3">
+            <input type="checkbox" class="doi-checkbox w-5 h-5" data-doi="${work.DOI}"
+                   data-title="${title.replace(/"/g, '&quot;')}"
+                   data-journal="${journal.replace(/"/g, '&quot;')}"
+                   data-date="${date.replace(/"/g, '&quot;')}"
+                   data-authors="${authors.replace(/"/g, '&quot;')}"
+                   data-link="${doiLink}"
+                   data-pmid="${pmid}">
+          </div>
+          <a href="${doiLink}" target="_blank" rel="noopener" class="block pr-8">
+            <div class="text-lg font-semibold text-gray-800 mb-1">${title}</div>
+            <div class="text-sm text-gray-600">${journal}${date ? ' · ' + date : ''}</div>
+            <div class="text-sm text-gray-600 truncate">${authors}</div>
+            <div class="mt-2 text-blue-600 text-sm">DOI: ${work.DOI}</div>
+            ${pmid ? `<div class="mt-1 text-blue-600 text-sm">PMID: ${pmid}</div>` : ''}
+          </a>
+        `;
+        doiResults.innerHTML = '';
+        doiResults.appendChild(card);
+
+        // Add save button if not exists
+        if (!document.getElementById('saveDOIBtn')) {
+          const saveDOIBtn = document.createElement('button');
+          saveDOIBtn.id = 'saveDOIBtn';
+          saveDOIBtn.className = 'px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm hidden mt-2';
+          saveDOIBtn.textContent = 'Save';
+          saveDOIBtn.addEventListener('click', () => {
+            const checkbox = document.querySelector('.doi-checkbox:checked');
+            if (checkbox) {
+              const paperData = {
+                pmid: checkbox.dataset.pmid || `doi-${checkbox.dataset.doi}`,
+                title: checkbox.dataset.title,
+                journal: checkbox.dataset.journal,
+                date: checkbox.dataset.date,
+                authors: checkbox.dataset.authors,
+                link: checkbox.dataset.link
+              };
+              if (savePaper(paperData)) {
+                alert('Paper saved.');
+                checkbox.checked = false;
+                saveDOIBtn.classList.add('hidden');
+              } else {
+                alert('Paper already saved.');
+              }
+            }
+          });
+          doiResults.appendChild(saveDOIBtn);
+        }
+
+        // Update save button visibility
+        const saveDOIBtn = document.getElementById('saveDOIBtn');
+        const checkbox = document.querySelector('.doi-checkbox');
+        checkbox.addEventListener('change', () => {
+          if (saveDOIBtn) {
+            saveDOIBtn.classList.toggle('hidden', !checkbox.checked);
+          }
+        });
+
+      } catch (error) {
+        console.error('DOI search error:', error);
+        doiResults.innerHTML = `<div class="text-red-500">Error: ${error.message}. Please check the DOI and try again.</div>`;
+      }
+    }
+
+    searchDOIBtn.addEventListener('click', () => {
+      searchDOI(doiInput.value);
+    });
+
+    doiInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchDOI(doiInput.value);
       }
     });
 
