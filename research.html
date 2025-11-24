@@ -20,7 +20,7 @@
     <div class="bg-white rounded-xl shadow p-4 mb-6 grid grid-cols-1 lg:grid-cols-6 gap-3">
       <input id="query" type="text" class="border rounded-lg px-3 py-2 col-span-2"
              value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
-             placeholder="검색어를 입력하세요"/>
+             placeholder="Enter search terms"/>
       <input id="author" type="text" class="border rounded-lg px-3 py-2"
              placeholder="author"/>
       <select id="journal" class="border rounded-lg px-3 py-2">
@@ -68,9 +68,9 @@
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-xl font-semibold text-gray-800">PubMed</h2>
         <div class="flex items-center gap-3">
-          <button id="saveSelected" class="px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm hidden">선택 저장</button>
-          <a href="saved.html" class="text-blue-600 hover:underline text-sm">저장된 논문</a>
-          <div class="text-sm text-gray-500">자동 로드됨</div>
+          <button id="saveSelected" class="px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm hidden">Save Selected</button>
+          <a href="saved.html" class="text-blue-600 hover:underline text-sm">Saved Papers</a>
+          <div class="text-sm text-gray-500">Auto loaded</div>
         </div>
       </div>
       <div id="pubmed" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
@@ -248,9 +248,9 @@
       });
       updateSaveButton();
       if (savedCount > 0) {
-        alert(`${savedCount}개의 논문이 저장되었습니다.`);
+        alert(`${savedCount} paper${savedCount !== 1 ? 's' : ''} saved.`);
       } else {
-        alert('이미 저장된 논문입니다.');
+        alert('Papers already saved.');
       }
     });
 
