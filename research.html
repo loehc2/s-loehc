@@ -17,10 +17,12 @@
 
   <main class="container mx-auto px-4 py-8">
     <!-- Controls -->
-    <div class="bg-white rounded-xl shadow p-4 mb-6 grid grid-cols-1 lg:grid-cols-5 gap-3">
+    <div class="bg-white rounded-xl shadow p-4 mb-6 grid grid-cols-1 lg:grid-cols-6 gap-3">
       <input id="query" type="text" class="border rounded-lg px-3 py-2 col-span-2"
              value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
              placeholder="검색어를 입력하세요"/>
+      <input id="author" type="text" class="border rounded-lg px-3 py-2"
+             placeholder="author"/>
       <select id="journal" class="border rounded-lg px-3 py-2">
         <option value="">All Journals</option>
         <option value="(nature[journal] OR science[journal] OR cell[journal])">
@@ -101,8 +103,13 @@
     }
     function getQuery() {
       const baseQuery = document.getElementById('query').value.trim();
+      const authorFilter = document.getElementById('author').value.trim();
       const journalFilter = document.getElementById('journal').value;
-      return journalFilter ? `${baseQuery} AND ${journalFilter}` : baseQuery;
+      let query = baseQuery;
+      if (authorFilter) {
+        query += ` AND ${authorFilter}[author]`;
+      }
+      return journalFilter ? `${query} AND ${journalFilter}` : query;
     }
     function getDateParams() {
       const today = new Date();
