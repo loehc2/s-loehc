@@ -12,7 +12,7 @@
     <div class="container mx-auto px-4 flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-800">Saved Papers</h1>
       <div class="flex gap-4">
-        <a href="research.html" class="text-blue-600 hover:underline">검색</a>
+        <a href="research.html" class="text-blue-600 hover:underline">Search</a>
         <a href="index.html" class="text-blue-600 hover:underline">← Back</a>
       </div>
     </div>
@@ -21,14 +21,14 @@
   <main class="container mx-auto px-4 py-8">
     <div class="mb-4 flex items-center justify-between">
       <p id="paperCount" class="text-gray-600"></p>
-      <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">전체 삭제</button>
+      <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">Clear All</button>
     </div>
 
     <div id="papersList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
     
     <div id="emptyState" class="text-center py-12 hidden">
-      <p class="text-gray-500 text-lg">저장된 논문이 없습니다.</p>
-      <a href="research.html" class="text-blue-600 hover:underline mt-4 inline-block">논문 검색하러 가기</a>
+      <p class="text-gray-500 text-lg">No saved papers.</p>
+      <a href="research.html" class="text-blue-600 hover:underline mt-4 inline-block">Go to Search</a>
     </div>
   </main>
 
@@ -52,7 +52,7 @@
     }
 
     function clearAllPapers() {
-      if (confirm('모든 저장된 논문을 삭제하시겠습니까?')) {
+      if (confirm('Are you sure you want to delete all saved papers?')) {
         localStorage.removeItem('savedPapers');
         displayPapers();
       }
@@ -65,7 +65,7 @@
       const paperCount = document.getElementById('paperCount');
       const clearAllBtn = document.getElementById('clearAll');
 
-      paperCount.textContent = `총 ${papers.length}개의 논문이 저장되어 있습니다.`;
+      paperCount.textContent = `${papers.length} paper${papers.length !== 1 ? 's' : ''} saved`;
       clearAllBtn.classList.toggle('hidden', papers.length === 0);
 
       if (papers.length === 0) {
@@ -83,11 +83,11 @@
       papers.forEach(paper => {
         const card = document.createElement('div');
         card.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
-        const savedDate = new Date(paper.savedAt).toLocaleDateString('ko-KR');
+        const savedDate = new Date(paper.savedAt).toLocaleDateString('en-US');
         card.innerHTML = `
           <button class="absolute top-3 right-3 text-red-600 hover:text-red-800" 
                   onclick="removePaper('${paper.pmid}')" 
-                  title="삭제">
+                  title="Delete">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
             </svg>
@@ -97,7 +97,7 @@
             <div class="text-sm text-gray-600">${paper.journal} · ${paper.date}</div>
             <div class="text-sm text-gray-600 truncate">${paper.authors}</div>
             <div class="mt-2 text-blue-600 text-sm">PMID: ${paper.pmid}</div>
-            <div class="mt-2 text-xs text-gray-400">저장일: ${savedDate}</div>
+            <div class="mt-2 text-xs text-gray-400">Saved: ${savedDate}</div>
           </a>
         `;
         papersList.appendChild(card);
