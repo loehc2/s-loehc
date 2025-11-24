@@ -6,6 +6,9 @@
   <title>Saved Papers</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="referrer" content="no-referrer"/>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-white shadow py-6">
@@ -19,9 +22,21 @@
   </header>
 
   <main class="container mx-auto px-4 py-8">
-    <div class="mb-4 flex items-center justify-between">
-      <p id="paperCount" class="text-gray-600"></p>
-      <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">Clear All</button>
+    <div class="mb-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-3">
+        <p id="paperCount" class="text-gray-600"></p>
+        <span id="syncStatus" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-600 hidden">
+          <span id="syncIcon">🔄</span> <span id="syncText">Syncing...</span>
+        </span>
+      </div>
+      <div class="flex gap-2">
+        <button id="exportBtn" class="px-3 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm">Export</button>
+        <label for="importFile" class="px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm cursor-pointer">
+          Import
+          <input type="file" id="importFile" accept=".json" class="hidden" onchange="importPapers(event)">
+        </label>
+        <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">Clear All</button>
+      </div>
     </div>
 
     <!-- Category Tabs -->
@@ -79,7 +94,149 @@
 
   <script>
     let currentCategory = 'all';
+    let firebaseInitialized = false;
+    let database = null;
 
+    // ============================================
+    // Firebase 설정
+    // ============================================
+    // 아래에 Firebase 콘솔에서 복사한 설정 정보를 붙여넣으세요
+    // FIREBASE_SETUP.md 파일의 3단계에서 복사한 정보를 사용하세요
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYvtzLp2CaeMk14navRx9Sgum_J5rZsHo",
+      authDomain: "fir-loehc-papers.firebaseapp.com",
+      databaseURL: "https://fir-loehc-papers-default-rtdb.firebaseio.com",
+      projectId: "fir-loehc-papers",
+      storageBucket: "fir-loehc-papers.firebasestorage.app",
+      messagingSenderId: "273353748384",
+      appId: "1:273353748384:web:47aac0f88c3c666c56bec5",
+      measurementId: "G-XKVJH93TKJ"
+    };
+
+    // Firebase 초기화
+    function initFirebase() {
+      // 설정이 완료되었는지 확인
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('AIza...')) {
+        console.log('Firebase not configured. Using localStorage only.');
+        updateSyncStatus('offline', 'Local only');
+        return false;
+      }
+
+      try {
+        firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        firebaseInitialized = true;
+        console.log('Firebase initialized successfully');
+        updateSyncStatus('online', 'Synced');
+        
+        // Firebase에서 데이터 로드
+        loadFromFirebase();
+        
+        // Firebase 변경사항 감지
+        database.ref('papers').on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const papers = Array.isArray(data) ? data : Object.values(data);
+            localStorage.setItem('savedPapers', JSON.stringify(papers));
+            displayPapers();
+            updateSyncStatus('online', 'Synced');
+          }
+        });
+        
+        return true;
+      } catch (error) {
+        console.error('Firebase initialization error:', error);
+        updateSyncStatus('error', 'Sync error');
+        return false;
+      }
+    }
+
+    // 동기화 상태 표시 업데이트
+    function updateSyncStatus(status, text) {
+      const syncStatus = document.getElementById('syncStatus');
+      const syncIcon = document.getElementById('syncIcon');
+      const syncText = document.getElementById('syncText');
+      
+      if (!syncStatus) return;
+      
+      syncStatus.classList.remove('hidden', 'bg-gray-200', 'bg-green-200', 'bg-red-200');
+      syncText.textContent = text;
+      
+      if (status === 'online') {
+        syncStatus.classList.add('bg-green-200', 'text-green-700');
+        syncIcon.textContent = '✓';
+      } else if (status === 'offline') {
+        syncStatus.classList.add('bg-gray-200', 'text-gray-600');
+        syncIcon.textContent = '○';
+      } else if (status === 'error') {
+        syncStatus.classList.add('bg-red-200', 'text-red-700');
+        syncIcon.textContent = '✗';
+      }
+    }
+
+    // Firebase에서 데이터 로드
+    function loadFromFirebase() {
+      if (!firebaseInitialized) return;
+      
+      database.ref('papers').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const papers = Array.isArray(data) ? data : Object.values(data);
+          const localPapers = getSavedPapers();
+          
+          // Firebase 데이터가 더 최신이면 병합
+          if (papers.length > 0) {
+            const merged = mergePapers(localPapers, papers);
+            localStorage.setItem('savedPapers', JSON.stringify(merged));
+            saveToFirebase(merged);
+            displayPapers();
+          }
+        }
+      });
+    }
+
+    // Firebase에 데이터 저장
+    function saveToFirebase(papers) {
+      if (!firebaseInitialized) return;
+      
+      try {
+        updateSyncStatus('online', 'Syncing...');
+        database.ref('papers').set(papers).then(() => {
+          console.log('Saved to Firebase');
+          updateSyncStatus('online', 'Synced');
+        }).catch((error) => {
+          console.error('Firebase save error:', error);
+          updateSyncStatus('error', 'Sync failed');
+        });
+      } catch (error) {
+        console.error('Firebase save error:', error);
+        updateSyncStatus('error', 'Sync failed');
+      }
+    }
+
+    // 논문 데이터 병합 (중복 제거)
+    function mergePapers(local, remote) {
+      const merged = [...local];
+      const localPmids = new Set(local.map(p => p.pmid));
+      
+      remote.forEach(paper => {
+        if (!localPmids.has(paper.pmid)) {
+          merged.push(paper);
+        } else {
+          // 기존 논문 업데이트 (카테고리 등)
+          const index = merged.findIndex(p => p.pmid === paper.pmid);
+          if (index !== -1) {
+            merged[index] = { ...merged[index], ...paper };
+          }
+        }
+      });
+      
+      return merged;
+    }
+
+    // ============================================
+    // 기존 localStorage 함수들 (Firebase와 통합)
+    // ============================================
     function getSavedPapers() {
       const saved = localStorage.getItem('savedPapers');
       return saved ? JSON.parse(saved) : [];
@@ -87,6 +244,10 @@
 
     function savePapers(papers) {
       localStorage.setItem('savedPapers', JSON.stringify(papers));
+      // Firebase에도 저장
+      if (firebaseInitialized) {
+        saveToFirebase(papers);
+      }
     }
 
     function removePaper(pmid) {
@@ -111,6 +272,67 @@
         localStorage.removeItem('savedPapers');
         displayPapers();
       }
+    }
+
+    function exportPapers() {
+      const papers = getSavedPapers();
+      if (papers.length === 0) {
+        alert('No papers to export.');
+        return;
+      }
+      const dataStr = JSON.stringify(papers, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `saved-papers-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function importPapers(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!Array.isArray(imported)) {
+            alert('Invalid file format.');
+            return;
+          }
+
+          const current = getSavedPapers();
+          const existingPmids = new Set(current.map(p => p.pmid));
+          
+          // Merge: keep existing papers, add new ones
+          let added = 0;
+          let skipped = 0;
+          
+          imported.forEach(paper => {
+            if (!existingPmids.has(paper.pmid)) {
+              current.push(paper);
+              existingPmids.add(paper.pmid);
+              added++;
+            } else {
+              skipped++;
+            }
+          });
+
+          savePapers(current);
+          displayPapers();
+          
+          alert(`Import complete: ${added} new papers added, ${skipped} duplicates skipped.`);
+        } catch (error) {
+          alert('Error reading file: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+      // Reset input
+      event.target.value = '';
     }
 
     function getCategoryCounts(papers) {
@@ -219,13 +441,19 @@
       });
     });
 
+    document.getElementById('exportBtn').addEventListener('click', exportPapers);
     document.getElementById('clearAll').addEventListener('click', clearAllPapers);
 
     // 전역 함수로 노출 (onclick에서 사용)
     window.removePaper = removePaper;
     window.updateCategory = updateCategory;
+    window.importPapers = importPapers;
 
     // 초기 로드
+    // Firebase 초기화 시도 (설정이 없으면 localStorage만 사용)
+    initFirebase();
+    
+    // Firebase 초기화 후에도 displayPapers 호출 (localStorage 데이터 표시)
     displayPapers();
   </script>
 </body>
