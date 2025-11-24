@@ -24,6 +24,28 @@
       <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">Clear All</button>
     </div>
 
+    <!-- Category Tabs -->
+    <div class="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition active" data-category="all">
+        All <span id="count-all" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="CoV">
+        CoV <span id="count-CoV" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="HIV">
+        HIV <span id="count-HIV" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="Flu">
+        Flu <span id="count-Flu" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="method">
+        Method <span id="count-method" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="etc">
+        etc <span id="count-etc" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
+    </div>
+
     <div id="papersList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
     
     <div id="emptyState" class="text-center py-12 hidden">
@@ -38,17 +60,50 @@
     </div>
   </footer>
 
+  <style>
+    .tab-btn.active {
+      background-color: #3b82f6;
+      color: white;
+    }
+    .tab-btn.active span {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    .tab-btn:not(.active) {
+      background-color: transparent;
+      color: #6b7280;
+    }
+    .tab-btn:not(.active):hover {
+      background-color: #f3f4f6;
+    }
+  </style>
+
   <script>
+    let currentCategory = 'all';
+
     function getSavedPapers() {
       const saved = localStorage.getItem('savedPapers');
       return saved ? JSON.parse(saved) : [];
     }
 
+    function savePapers(papers) {
+      localStorage.setItem('savedPapers', JSON.stringify(papers));
+    }
+
     function removePaper(pmid) {
       const saved = getSavedPapers();
       const filtered = saved.filter(p => p.pmid !== pmid);
-      localStorage.setItem('savedPapers', JSON.stringify(filtered));
+      savePapers(filtered);
       displayPapers();
+    }
+
+    function updateCategory(pmid, category) {
+      const saved = getSavedPapers();
+      const paper = saved.find(p => p.pmid === pmid);
+      if (paper) {
+        paper.category = category || 'etc';
+        savePapers(saved);
+        displayPapers();
+      }
     }
 
     function clearAllPapers() {
@@ -58,19 +113,57 @@
       }
     }
 
+    function getCategoryCounts(papers) {
+      const counts = { all: papers.length, CoV: 0, HIV: 0, Flu: 0, method: 0, etc: 0 };
+      papers.forEach(paper => {
+        const cat = paper.category || 'etc';
+        if (counts.hasOwnProperty(cat)) {
+          counts[cat]++;
+        } else {
+          counts.etc++;
+        }
+      });
+      return counts;
+    }
+
+    function updateCategoryCounts(papers) {
+      const counts = getCategoryCounts(papers);
+      Object.keys(counts).forEach(cat => {
+        const countEl = document.getElementById(`count-${cat}`);
+        if (countEl) {
+          countEl.textContent = `(${counts[cat]})`;
+        }
+      });
+    }
+
     function displayPapers() {
-      const papers = getSavedPapers();
+      const allPapers = getSavedPapers();
       const papersList = document.getElementById('papersList');
       const emptyState = document.getElementById('emptyState');
       const paperCount = document.getElementById('paperCount');
       const clearAllBtn = document.getElementById('clearAll');
 
-      paperCount.textContent = `${papers.length} paper${papers.length !== 1 ? 's' : ''} saved`;
-      clearAllBtn.classList.toggle('hidden', papers.length === 0);
+      // Filter by category
+      const papers = currentCategory === 'all' 
+        ? allPapers 
+        : allPapers.filter(p => (p.category || 'etc') === currentCategory);
+
+      paperCount.textContent = `${papers.length} paper${papers.length !== 1 ? 's' : ''} ${currentCategory === 'all' ? 'saved' : `in ${currentCategory}`}`;
+      clearAllBtn.classList.toggle('hidden', allPapers.length === 0);
+
+      updateCategoryCounts(allPapers);
 
       if (papers.length === 0) {
         papersList.innerHTML = '';
-        emptyState.classList.remove('hidden');
+        if (currentCategory === 'all') {
+          emptyState.classList.remove('hidden');
+        } else {
+          emptyState.innerHTML = `
+            <p class="text-gray-500 text-lg">No papers in ${currentCategory} category.</p>
+            <a href="research.html" class="text-blue-600 hover:underline mt-4 inline-block">Go to Search</a>
+          `;
+          emptyState.classList.remove('hidden');
+        }
         return;
       }
 
@@ -84,15 +177,27 @@
         const card = document.createElement('div');
         card.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
         const savedDate = new Date(paper.savedAt).toLocaleDateString('en-US');
+        const currentCat = paper.category || 'etc';
         card.innerHTML = `
-          <button class="absolute top-3 right-3 text-red-600 hover:text-red-800" 
-                  onclick="removePaper('${paper.pmid}')" 
-                  title="Delete">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-          </button>
-          <a href="${paper.link}" target="_blank" rel="noopener" class="block pr-8">
+          <div class="absolute top-3 right-3 flex gap-2">
+            <select class="category-select text-xs border rounded px-2 py-1" 
+                    data-pmid="${paper.pmid}" 
+                    onchange="updateCategory('${paper.pmid}', this.value)">
+              <option value="CoV" ${currentCat === 'CoV' ? 'selected' : ''}>CoV</option>
+              <option value="HIV" ${currentCat === 'HIV' ? 'selected' : ''}>HIV</option>
+              <option value="Flu" ${currentCat === 'Flu' ? 'selected' : ''}>Flu</option>
+              <option value="method" ${currentCat === 'method' ? 'selected' : ''}>Method</option>
+              <option value="etc" ${currentCat === 'etc' ? 'selected' : ''}>etc</option>
+            </select>
+            <button class="text-red-600 hover:text-red-800" 
+                    onclick="removePaper('${paper.pmid}')" 
+                    title="Delete">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          </div>
+          <a href="${paper.link}" target="_blank" rel="noopener" class="block pr-20">
             <div class="text-lg font-semibold text-gray-800 mb-1">${paper.title}</div>
             <div class="text-sm text-gray-600">${paper.journal} · ${paper.date}</div>
             <div class="text-sm text-gray-600 truncate">${paper.authors}</div>
@@ -104,10 +209,21 @@
       });
     }
 
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategory = btn.dataset.category;
+        displayPapers();
+      });
+    });
+
     document.getElementById('clearAll').addEventListener('click', clearAllPapers);
 
     // 전역 함수로 노출 (onclick에서 사용)
     window.removePaper = removePaper;
+    window.updateCategory = updateCategory;
 
     // 초기 로드
     displayPapers();
