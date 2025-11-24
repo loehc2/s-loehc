@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Saved Papers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="referrer" content="no-referrer"/>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-white shadow py-6">
+    <div class="container mx-auto px-4 flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-800">Saved Papers</h1>
+      <div class="flex gap-4">
+        <a href="research.html" class="text-blue-600 hover:underline">검색</a>
+        <a href="index.html" class="text-blue-600 hover:underline">← Back</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container mx-auto px-4 py-8">
+    <div class="mb-4 flex items-center justify-between">
+      <p id="paperCount" class="text-gray-600"></p>
+      <button id="clearAll" class="px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">전체 삭제</button>
+    </div>
+
+    <div id="papersList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    
+    <div id="emptyState" class="text-center py-12 hidden">
+      <p class="text-gray-500 text-lg">저장된 논문이 없습니다.</p>
+      <a href="research.html" class="text-blue-600 hover:underline mt-4 inline-block">논문 검색하러 가기</a>
+    </div>
+  </main>
+
+  <footer class="bg-gray-800 text-white py-6 mt-12">
+    <div class="container mx-auto px-4 text-center">
+      <p>&copy; 2025 SuncheolP</p>
+    </div>
+  </footer>
+
+  <script>
+    function getSavedPapers() {
+      const saved = localStorage.getItem('savedPapers');
+      return saved ? JSON.parse(saved) : [];
+    }
+
+    function removePaper(pmid) {
+      const saved = getSavedPapers();
+      const filtered = saved.filter(p => p.pmid !== pmid);
+      localStorage.setItem('savedPapers', JSON.stringify(filtered));
+      displayPapers();
+    }
+
+    function clearAllPapers() {
+      if (confirm('모든 저장된 논문을 삭제하시겠습니까?')) {
+        localStorage.removeItem('savedPapers');
+        displayPapers();
+      }
+    }
+
+    function displayPapers() {
+      const papers = getSavedPapers();
+      const papersList = document.getElementById('papersList');
+      const emptyState = document.getElementById('emptyState');
+      const paperCount = document.getElementById('paperCount');
+      const clearAllBtn = document.getElementById('clearAll');
+
+      paperCount.textContent = `총 ${papers.length}개의 논문이 저장되어 있습니다.`;
+      clearAllBtn.classList.toggle('hidden', papers.length === 0);
+
+      if (papers.length === 0) {
+        papersList.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      papersList.innerHTML = '';
+
+      // 최신순으로 정렬 (저장 시간 기준)
+      papers.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+
+      papers.forEach(paper => {
+        const card = document.createElement('div');
+        card.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
+        const savedDate = new Date(paper.savedAt).toLocaleDateString('ko-KR');
+        card.innerHTML = `
+          <button class="absolute top-3 right-3 text-red-600 hover:text-red-800" 
+                  onclick="removePaper('${paper.pmid}')" 
+                  title="삭제">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+          </button>
+          <a href="${paper.link}" target="_blank" rel="noopener" class="block pr-8">
+            <div class="text-lg font-semibold text-gray-800 mb-1">${paper.title}</div>
+            <div class="text-sm text-gray-600">${paper.journal} · ${paper.date}</div>
+            <div class="text-sm text-gray-600 truncate">${paper.authors}</div>
+            <div class="mt-2 text-blue-600 text-sm">PMID: ${paper.pmid}</div>
+            <div class="mt-2 text-xs text-gray-400">저장일: ${savedDate}</div>
+          </a>
+        `;
+        papersList.appendChild(card);
+      });
+    }
+
+    document.getElementById('clearAll').addEventListener('click', clearAllPapers);
+
+    // 전역 함수로 노출 (onclick에서 사용)
+    window.removePaper = removePaper;
+
+    // 초기 로드
+    displayPapers();
+  </script>
+</body>
+</html>
+
