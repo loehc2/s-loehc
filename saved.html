@@ -56,6 +56,9 @@
       <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="method">
         Method <span id="count-method" class="ml-1 text-sm text-gray-500">(0)</span>
       </button>
+      <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="Important">
+        Important <span id="count-Important" class="ml-1 text-sm text-gray-500">(0)</span>
+      </button>
       <button class="tab-btn px-4 py-2 rounded-t-lg font-medium transition" data-category="etc">
         etc <span id="count-etc" class="ml-1 text-sm text-gray-500">(0)</span>
       </button>
@@ -336,7 +339,7 @@
     }
 
     function getCategoryCounts(papers) {
-      const counts = { all: papers.length, CoV: 0, HIV: 0, Flu: 0, method: 0, etc: 0 };
+      const counts = { all: papers.length, CoV: 0, HIV: 0, Flu: 0, method: 0, Important: 0, etc: 0 };
       papers.forEach(paper => {
         const cat = paper.category || 'etc';
         if (counts.hasOwnProperty(cat)) {
@@ -416,6 +419,7 @@
               <option value="HIV" ${currentCat === 'HIV' ? 'selected' : ''}>HIV</option>
               <option value="Flu" ${currentCat === 'Flu' ? 'selected' : ''}>Flu</option>
               <option value="method" ${currentCat === 'method' ? 'selected' : ''}>Method</option>
+              <option value="Important" ${currentCat === 'Important' ? 'selected' : ''}>Important</option>
               <option value="etc" ${currentCat === 'etc' ? 'selected' : ''}>etc</option>
             </select>
             <button class="text-red-600 hover:text-red-800" 
