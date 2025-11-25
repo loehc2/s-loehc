@@ -138,11 +138,23 @@
         // Firebase 변경사항 감지
         database.ref('papers').on('value', (snapshot) => {
           const data = snapshot.val();
-          if (data) {
+          // Only overwrite localStorage when remote DB actually has data
+          let hasData = false;
+          if (Array.isArray(data)) {
+            hasData = data.length > 0;
+          } else if (data && typeof data === 'object') {
+            hasData = Object.keys(data).length > 0;
+          }
+
+          if (hasData) {
             const papers = Array.isArray(data) ? data : Object.values(data);
             localStorage.setItem('savedPapers', JSON.stringify(papers));
             displayPapers();
             updateSyncStatus('online', 'Synced');
+          } else {
+            // Do not overwrite localStorage with an empty remote value.
+            // If remote is empty, keep local copy (if any) and show offline/no-data status.
+            updateSyncStatus('offline', 'No remote data');
           }
         });
         
@@ -201,7 +213,13 @@
     // Firebase에 데이터 저장
     function saveToFirebase(papers) {
       if (!firebaseInitialized) return;
-      
+      // Avoid writing an empty array to remote unintentionally
+      if (Array.isArray(papers) && papers.length === 0) {
+        console.warn('saveToFirebase: empty papers array — skipping remote save to avoid data loss');
+        updateSyncStatus('offline', 'No data to save');
+        return;
+      }
+
       try {
         updateSyncStatus('online', 'Syncing...');
         database.ref('papers').set(papers).then(() => {
