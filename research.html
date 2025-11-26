@@ -123,8 +123,10 @@
 
     // Firebase 초기화
     function initFirebase() {
-      if (!firebaseConfig.apiKey) {
+      // 설정이 완료되었는지 확인
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('AIza...')) {
         console.log('Firebase not configured. Using localStorage only.');
+        updateSyncStatus('offline', 'Local only');
         return false;
       }
 
@@ -133,26 +135,110 @@
         database = firebase.database();
         firebaseInitialized = true;
         console.log('Firebase initialized successfully');
+        updateSyncStatus('online', 'Synced');
+        
+        // Firebase에서 데이터 로드
+        loadFromFirebase();
+        
+        // Firebase 변경사항 감지
+        database.ref('papers').on('value', (snapshot) => {
+          const data = snapshot.val();
+          // Only overwrite localStorage when remote DB actually has data
+          let hasData = false;
+          if (Array.isArray(data)) {
+            hasData = data.length > 0;
+          } else if (data && typeof data === 'object') {
+            hasData = Object.keys(data).length > 0;
+          }
+
+          if (hasData) {
+            const papers = Array.isArray(data) ? data : Object.values(data);
+            localStorage.setItem('savedPapers', JSON.stringify(papers));
+            updateSyncStatus('online', 'Synced');
+          } else {
+            // Do not overwrite localStorage with an empty remote value.
+            // If remote is empty, keep local copy (if any) and show offline/no-data status.
+            updateSyncStatus('offline', 'No remote data');
+          }
+        });
+        
         return true;
       } catch (error) {
         console.error('Firebase initialization error:', error);
+        updateSyncStatus('error', 'Sync error');
         return false;
       }
+    }
+
+    // 동기화 상태 표시 업데이트
+    function updateSyncStatus(status, text) {
+      // research.html에는 syncStatus 요소가 없으므로, 이 함수는 오류 없이 실행되도록 둡니다.
+      // 필요하다면 여기에 UI 피드백을 추가할 수 있습니다.
+    }
+
+    // Firebase에서 데이터 로드
+    function loadFromFirebase() {
+      if (!firebaseInitialized) return;
+      
+      database.ref('papers').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const papers = Array.isArray(data) ? data : Object.values(data);
+          const localPapers = getSavedPapers();
+          
+          // Firebase 데이터가 더 최신이면 병합
+          if (papers.length > 0) {
+            const merged = mergePapers(localPapers, papers);
+            localStorage.setItem('savedPapers', JSON.stringify(merged));
+            saveToFirebase(merged);
+          }
+        }
+      });
     }
 
     // Firebase에 데이터 저장
     function saveToFirebase(papers) {
       if (!firebaseInitialized) return;
-      
+      // Avoid writing an empty array to remote unintentionally
+      if (Array.isArray(papers) && papers.length === 0) {
+        console.warn('saveToFirebase: empty papers array — skipping remote save to avoid data loss');
+        updateSyncStatus('offline', 'No data to save');
+        return;
+      }
+
       try {
+        updateSyncStatus('online', 'Syncing...');
         database.ref('papers').set(papers).then(() => {
           console.log('Saved to Firebase');
+          updateSyncStatus('online', 'Synced');
         }).catch((error) => {
           console.error('Firebase save error:', error);
+          updateSyncStatus('error', 'Sync failed');
         });
       } catch (error) {
         console.error('Firebase save error:', error);
+        updateSyncStatus('error', 'Sync failed');
       }
+    }
+
+    // 논문 데이터 병합 (중복 제거)
+    function mergePapers(local, remote) {
+      const merged = [...local];
+      const localPmids = new Set(local.map(p => p.pmid));
+      
+      remote.forEach(paper => {
+        if (!localPmids.has(paper.pmid)) {
+          merged.push(paper);
+        } else {
+          // 기존 논문 업데이트 (카테고리 등)
+          const index = merged.findIndex(p => p.pmid === paper.pmid);
+          if (index !== -1) {
+            merged[index] = { ...merged[index], ...paper };
+          }
+        }
+      });
+      
+      return merged;
     }
 
     const updated = document.getElementById('updated');
@@ -283,6 +369,14 @@
       return saved ? JSON.parse(saved) : [];
     }
 
+    function savePapers(papers) {
+      localStorage.setItem('savedPapers', JSON.stringify(papers));
+      // Firebase에도 저장
+      if (firebaseInitialized) {
+        saveToFirebase(papers);
+      }
+    }
+
     function savePaper(paperData) {
       const saved = getSavedPapers();
       // 중복 체크
@@ -291,11 +385,7 @@
           ...paperData,
           savedAt: new Date().toISOString()
         });
-        localStorage.setItem('savedPapers', JSON.stringify(saved));
-        // Firebase에도 저장
-        if (firebaseInitialized) {
-          saveToFirebase(saved);
-        }
+        savePapers(saved);
         return true;
       }
       return false;
@@ -304,26 +394,38 @@
     saveBtn.addEventListener('click', () => {
       const checked = document.querySelectorAll('.paper-checkbox:checked');
       let savedCount = 0;
+      
+      // Ensure we have the latest papers list from local storage, which is synced by Firebase
+      const currentPapers = getSavedPapers();
+      const existingPmids = new Set(currentPapers.map(p => p.pmid));
+
       checked.forEach(checkbox => {
-        const paperData = {
-          pmid: checkbox.dataset.pmid,
-          title: checkbox.dataset.title,
-          journal: checkbox.dataset.journal,
-          date: checkbox.dataset.date,
-          authors: checkbox.dataset.authors,
-          link: checkbox.dataset.link
-        };
-        if (savePaper(paperData)) {
+        const pmid = checkbox.dataset.pmid;
+        if (!existingPmids.has(pmid)) {
+          const paperData = {
+            pmid: pmid,
+            title: checkbox.dataset.title,
+            journal: checkbox.dataset.journal,
+            date: checkbox.dataset.date,
+            authors: checkbox.dataset.authors,
+            link: checkbox.dataset.link,
+            savedAt: new Date().toISOString()
+          };
+          currentPapers.push(paperData);
+          existingPmids.add(pmid);
           savedCount++;
         }
         checkbox.checked = false;
       });
-      updateSaveButton();
+
       if (savedCount > 0) {
+        savePapers(currentPapers);
         alert(`${savedCount} paper${savedCount !== 1 ? 's' : ''} saved.`);
       } else {
-        alert('Papers already saved.');
+        alert('Selected papers are already saved.');
       }
+      
+      updateSaveButton();
     });
 
     // DOI Search functionality

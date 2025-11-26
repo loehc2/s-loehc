@@ -291,6 +291,9 @@
     function clearAllPapers() {
       if (confirm('Are you sure you want to delete all saved papers?')) {
         localStorage.removeItem('savedPapers');
+        if (firebaseInitialized) {
+          database.ref('papers').set(null);
+        }
         displayPapers();
       }
     }
