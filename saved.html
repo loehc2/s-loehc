@@ -8,13 +8,17 @@
   <meta name="referrer" content="no-referrer"/>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-white shadow py-6">
     <div class="container mx-auto px-4 flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-800">Saved Papers</h1>
-      <div class="flex gap-4">
+      <div class="flex items-center gap-3">
+        <span id="userEmail" class="text-sm text-gray-600 hidden"></span>
+        <button id="loginBtn" class="px-3 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm">Google 로그인</button>
+        <button id="logoutBtn" class="px-3 py-1 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 text-sm hidden">로그아웃</button>
         <a href="research.html" class="text-blue-600 hover:underline">Search</a>
         <a href="index.html" class="text-blue-600 hover:underline">← Back</a>
       </div>
@@ -99,6 +103,10 @@
     let currentCategory = 'all';
     let firebaseInitialized = false;
     let database = null;
+    let auth = null;
+    let provider = null;
+    let currentUser = null;
+    let papersRef = null;
 
     // ============================================
     // Firebase 설정
@@ -126,43 +134,61 @@
       }
 
       try {
-        firebase.initializeApp(firebaseConfig);
-        database = firebase.database();
-        firebaseInitialized = true;
-        console.log('Firebase initialized successfully');
-        updateSyncStatus('online', 'Synced');
-        
-        // Firebase에서 데이터 로드
-        loadFromFirebase();
-        
-        // Firebase 변경사항 감지
-        database.ref('papers').on('value', (snapshot) => {
-          const data = snapshot.val();
-          // Only overwrite localStorage when remote DB actually has data
-          let hasData = false;
-          if (Array.isArray(data)) {
-            hasData = data.length > 0;
-          } else if (data && typeof data === 'object') {
-            hasData = Object.keys(data).length > 0;
-          }
-
-          if (hasData) {
-            const papers = Array.isArray(data) ? data : Object.values(data);
-            localStorage.setItem('savedPapers', JSON.stringify(papers));
-            displayPapers();
-            updateSyncStatus('online', 'Synced');
-          } else {
-            // Do not overwrite localStorage with an empty remote value.
-            // If remote is empty, keep local copy (if any) and show offline/no-data status.
-            updateSyncStatus('offline', 'No remote data');
-          }
-        });
-        
+        if (!firebaseInitialized) {
+          firebase.initializeApp(firebaseConfig);
+          database = firebase.database();
+          auth = firebase.auth();
+          provider = new firebase.auth.GoogleAuthProvider();
+          firebaseInitialized = true;
+          console.log('Firebase initialized successfully');
+        }
         return true;
       } catch (error) {
         console.error('Firebase initialization error:', error);
         updateSyncStatus('error', 'Sync error');
         return false;
+      }
+    }
+
+    function startDatabaseSync() {
+      if (!firebaseInitialized || !database || !auth || !auth.currentUser) {
+        updateSyncStatus('offline', 'Sign in to sync');
+        return;
+      }
+
+      if (!papersRef) {
+        papersRef = database.ref('papers');
+      }
+      papersRef.off();
+
+      loadFromFirebase();
+
+      papersRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        // Only overwrite localStorage when remote DB actually has data
+        let hasData = false;
+        if (Array.isArray(data)) {
+          hasData = data.length > 0;
+        } else if (data && typeof data === 'object') {
+          hasData = Object.keys(data).length > 0;
+        }
+
+        if (hasData) {
+          const papers = Array.isArray(data) ? data : Object.values(data);
+          localStorage.setItem('savedPapers', JSON.stringify(papers));
+          displayPapers();
+          updateSyncStatus('online', 'Synced');
+        } else {
+          // Do not overwrite localStorage with an empty remote value.
+          // If remote is empty, keep local copy (if any) and show offline/no-data status.
+          updateSyncStatus('offline', 'No remote data');
+        }
+      });
+    }
+
+    function stopDatabaseSync() {
+      if (papersRef) {
+        papersRef.off();
       }
     }
 
@@ -189,9 +215,70 @@
       }
     }
 
+    // 인증 UI 및 상태
+    function updateAuthUI(user) {
+      const userEmailEl = document.getElementById('userEmail');
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+
+      if (user) {
+        userEmailEl.textContent = user.email;
+        userEmailEl.classList.remove('hidden');
+        logoutBtn.classList.remove('hidden');
+        loginBtn.classList.add('hidden');
+      } else {
+        userEmailEl.classList.add('hidden');
+        logoutBtn.classList.add('hidden');
+        loginBtn.classList.remove('hidden');
+      }
+    }
+
+    function initAuth() {
+      if (!initFirebase()) return;
+      auth.onAuthStateChanged((user) => {
+        currentUser = user;
+        updateAuthUI(user);
+        if (user) {
+          updateSyncStatus('online', 'Signed in');
+          startDatabaseSync();
+        } else {
+          updateSyncStatus('offline', 'Sign in to sync');
+          stopDatabaseSync();
+        }
+      });
+    }
+
+    function ensureSignedIn(actionName) {
+      if (!auth || !auth.currentUser) {
+        alert(`구글 로그인 후 ${actionName} 가능합니다.`);
+        return false;
+      }
+      return true;
+    }
+
+    function googleLogin() {
+      if (!initFirebase()) return;
+      auth.signInWithPopup(provider)
+        .then((result) => {
+          const user = result.user;
+          console.log("로그인 성공:", user.email);
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        });
+    }
+
+    function googleLogout() {
+      if (!auth) return;
+      auth.signOut().catch((err) => {
+        console.error('로그아웃 실패:', err);
+      });
+    }
+
     // Firebase에서 데이터 로드
     function loadFromFirebase() {
-      if (!firebaseInitialized) return;
+      if (!firebaseInitialized || !database || !auth || !auth.currentUser) return;
       
       database.ref('papers').once('value', (snapshot) => {
         const data = snapshot.val();
@@ -203,7 +290,7 @@
           if (papers.length > 0) {
             const merged = mergePapers(localPapers, papers);
             localStorage.setItem('savedPapers', JSON.stringify(merged));
-            saveToFirebase(merged);
+            saveToFirebase(merged, true);
             displayPapers();
           }
         }
@@ -211,8 +298,13 @@
     }
 
     // Firebase에 데이터 저장
-    function saveToFirebase(papers) {
-      if (!firebaseInitialized) return;
+    function saveToFirebase(papers, skipAuthCheck = false) {
+      if (!firebaseInitialized || !auth || !auth.currentUser) {
+        if (!skipAuthCheck) {
+          updateSyncStatus('offline', 'Sign in to sync');
+        }
+        return;
+      }
       // Avoid writing an empty array to remote unintentionally
       if (Array.isArray(papers) && papers.length === 0) {
         console.warn('saveToFirebase: empty papers array — skipping remote save to avoid data loss');
@@ -263,35 +355,41 @@
       return saved ? JSON.parse(saved) : [];
     }
 
-    function savePapers(papers) {
+    function savePapers(papers, skipAuthCheck = false) {
+      if (!skipAuthCheck && !ensureSignedIn('저장')) {
+        return;
+      }
       localStorage.setItem('savedPapers', JSON.stringify(papers));
       // Firebase에도 저장
-      if (firebaseInitialized) {
-        saveToFirebase(papers);
+      if (firebaseInitialized && auth && auth.currentUser) {
+        saveToFirebase(papers, skipAuthCheck);
       }
     }
 
     function removePaper(pmid) {
+      if (!ensureSignedIn('삭제')) return;
       const saved = getSavedPapers();
       const filtered = saved.filter(p => p.pmid !== pmid);
-      savePapers(filtered);
+      savePapers(filtered, true);
       displayPapers();
     }
 
     function updateCategory(pmid, category) {
+      if (!ensureSignedIn('카테고리 변경')) return;
       const saved = getSavedPapers();
       const paper = saved.find(p => p.pmid === pmid);
       if (paper) {
         paper.category = category || 'etc';
-        savePapers(saved);
+        savePapers(saved, true);
         displayPapers();
       }
     }
 
     function clearAllPapers() {
+      if (!ensureSignedIn('전체 삭제')) return;
       if (confirm('Are you sure you want to delete all saved papers?')) {
         localStorage.removeItem('savedPapers');
-        if (firebaseInitialized) {
+        if (firebaseInitialized && auth && auth.currentUser) {
           database.ref('papers').set(null);
         }
         displayPapers();
@@ -317,6 +415,7 @@
     }
 
     function importPapers(event) {
+      if (!ensureSignedIn('가져오기')) return;
       const file = event.target.files[0];
       if (!file) return;
 
@@ -346,7 +445,7 @@
             }
           });
 
-          savePapers(current);
+          savePapers(current, true);
           displayPapers();
           
           alert(`Import complete: ${added} new papers added, ${skipped} duplicates skipped.`);
@@ -468,6 +567,8 @@
 
     document.getElementById('exportBtn').addEventListener('click', exportPapers);
     document.getElementById('clearAll').addEventListener('click', clearAllPapers);
+    document.getElementById('loginBtn').addEventListener('click', googleLogin);
+    document.getElementById('logoutBtn').addEventListener('click', googleLogout);
 
     // 전역 함수로 노출 (onclick에서 사용)
     window.removePaper = removePaper;
@@ -477,10 +578,10 @@
     // 초기 로드
     // Firebase 초기화 시도 (설정이 없으면 localStorage만 사용)
     initFirebase();
+    initAuth();
     
     // Firebase 초기화 후에도 displayPapers 호출 (localStorage 데이터 표시)
     displayPapers();
   </script>
 </body>
 </html>
-
