@@ -138,7 +138,7 @@
           firebase.initializeApp(firebaseConfig);
           database = firebase.database();
           auth = firebase.auth();
-          provider = new firebase.auth.GoogleAuthProvider();
+          provider = createProvider();
           firebaseInitialized = true;
           console.log('Firebase initialized successfully');
         }
@@ -148,6 +148,13 @@
         updateSyncStatus('error', 'Sync error');
         return false;
       }
+    }
+
+    function createProvider() {
+      const p = new firebase.auth.GoogleAuthProvider();
+      // Force account chooser so previous session does not auto-continue
+      p.setCustomParameters({ prompt: 'select_account' });
+      return p;
     }
 
     function startDatabaseSync() {
@@ -235,6 +242,9 @@
 
     function initAuth() {
       if (!initFirebase()) return;
+      auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch((err) => {
+        console.warn('Persistence set failed, fallback to default:', err);
+      });
       auth.onAuthStateChanged((user) => {
         currentUser = user;
         updateAuthUI(user);
@@ -258,15 +268,19 @@
 
     function googleLogin() {
       if (!initFirebase()) return;
-      auth.signInWithPopup(provider)
-        .then((result) => {
-          const user = result.user;
-          console.log("로그인 성공:", user.email);
-        })
-        .catch((err) => {
-          console.error(err);
-          alert('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
-        });
+      const loginProvider = createProvider();
+      // Ensure any lingering Firebase session is cleared before prompting
+      auth.signOut().catch(()=>{}).finally(() => {
+        auth.signInWithPopup(loginProvider)
+          .then((result) => {
+            const user = result.user;
+            console.log("로그인 성공:", user.email);
+          })
+          .catch((err) => {
+            console.error(err);
+            alert('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+          });
+      });
     }
 
     function googleLogout() {
