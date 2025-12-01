@@ -164,15 +164,18 @@
       return p;
     }
 
+    function getUserPapersRef() {
+      if (!database || !auth || !auth.currentUser) return null;
+      return database.ref(`users/${auth.currentUser.uid}/papers`);
+    }
+
     function startDatabaseSync() {
       if (!firebaseInitialized || !database || !auth || !auth.currentUser) {
         updateSyncStatus('offline', 'Sign in to sync');
         return;
       }
 
-      if (!papersRef) {
-        papersRef = database.ref('papers');
-      }
+      papersRef = getUserPapersRef();
       papersRef.off();
 
       loadFromFirebase();
@@ -203,6 +206,7 @@
       if (papersRef) {
         papersRef.off();
       }
+      papersRef = null;
     }
 
     // 인증 UI 및 상태
@@ -283,7 +287,9 @@
     function loadFromFirebase() {
       if (!firebaseInitialized || !database || !auth || !auth.currentUser) return;
       
-      database.ref('papers').once('value', (snapshot) => {
+      const userRef = getUserPapersRef();
+      if (!userRef) return;
+      userRef.once('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
           const papers = Array.isArray(data) ? data : Object.values(data);
@@ -314,7 +320,9 @@
 
       try {
         updateSyncStatus('online', 'Syncing...');
-        database.ref('papers').set(papers).then(() => {
+        const userRef = getUserPapersRef();
+        if (!userRef) return;
+        userRef.set(papers).then(() => {
           console.log('Saved to Firebase');
           updateSyncStatus('online', 'Synced');
         }).catch((error) => {
