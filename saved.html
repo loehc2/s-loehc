@@ -185,7 +185,7 @@
 
         if (hasData) {
           const papers = Array.isArray(data) ? data : Object.values(data);
-          localStorage.setItem('savedPapers', JSON.stringify(papers));
+          localStorage.setItem(getStorageKey(), JSON.stringify(papers));
           displayPapers();
           updateSyncStatus('online', 'Synced');
         } else {
@@ -259,6 +259,7 @@
           updateSyncStatus('offline', 'Sign in to sync');
           stopDatabaseSync();
         }
+        displayPapers(); // refresh list per user storage
       });
     }
 
@@ -309,7 +310,7 @@
           // Firebase 데이터가 더 최신이면 병합
           if (papers.length > 0) {
             const merged = mergePapers(localPapers, papers);
-            localStorage.setItem('savedPapers', JSON.stringify(merged));
+            localStorage.setItem(getStorageKey(), JSON.stringify(merged));
             saveToFirebase(merged, true);
             displayPapers();
           }
@@ -372,8 +373,12 @@
     // ============================================
     // 기존 localStorage 함수들 (Firebase와 통합)
     // ============================================
+    function getStorageKey() {
+      return `savedPapers:${auth && auth.currentUser ? auth.currentUser.uid : 'guest'}`;
+    }
+
     function getSavedPapers() {
-      const saved = localStorage.getItem('savedPapers');
+      const saved = localStorage.getItem(getStorageKey());
       return saved ? JSON.parse(saved) : [];
     }
 
@@ -381,7 +386,7 @@
       if (!skipAuthCheck && !ensureSignedIn('저장')) {
         return;
       }
-      localStorage.setItem('savedPapers', JSON.stringify(papers));
+      localStorage.setItem(getStorageKey(), JSON.stringify(papers));
       // Firebase에도 저장
       if (firebaseInitialized && auth && auth.currentUser) {
         saveToFirebase(papers, skipAuthCheck);
@@ -410,7 +415,7 @@
     function clearAllPapers() {
       if (!ensureSignedIn('전체 삭제')) return;
       if (confirm('Are you sure you want to delete all saved papers?')) {
-        localStorage.removeItem('savedPapers');
+        localStorage.removeItem(getStorageKey());
         if (firebaseInitialized && auth && auth.currentUser) {
           const userRef = getUserPapersRef();
           if (userRef) userRef.set(null);

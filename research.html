@@ -192,7 +192,7 @@
 
         if (hasData) {
           const papers = Array.isArray(data) ? data : Object.values(data);
-          localStorage.setItem('savedPapers', JSON.stringify(papers));
+          localStorage.setItem(getStorageKey(), JSON.stringify(papers));
           updateSyncStatus('online', 'Synced');
         } else {
           // Do not overwrite localStorage with an empty remote value.
@@ -298,7 +298,7 @@
           // Firebase 데이터가 더 최신이면 병합
           if (papers.length > 0) {
             const merged = mergePapers(localPapers, papers);
-            localStorage.setItem('savedPapers', JSON.stringify(merged));
+            localStorage.setItem(getStorageKey(), JSON.stringify(merged));
             saveToFirebase(merged);
           }
         }
@@ -472,6 +472,10 @@
       saveBtn.classList.toggle('hidden', checked.length === 0);
     }
 
+    function getStorageKey() {
+      return `savedPapers:${auth && auth.currentUser ? auth.currentUser.uid : 'guest'}`;
+    }
+
     pubmedDiv.addEventListener('change', (e) => {
       if (e.target.classList.contains('paper-checkbox')) {
         updateSaveButton();
@@ -479,14 +483,14 @@
     });
 
     function getSavedPapers() {
-      const saved = localStorage.getItem('savedPapers');
+      const saved = localStorage.getItem(getStorageKey());
       return saved ? JSON.parse(saved) : [];
     }
 
     function savePapers(papers) {
-      localStorage.setItem('savedPapers', JSON.stringify(papers));
+      localStorage.setItem(getStorageKey(), JSON.stringify(papers));
       // Firebase에도 저장
-      if (firebaseInitialized) {
+      if (firebaseInitialized && auth && auth.currentUser) {
         saveToFirebase(papers);
       }
     }
