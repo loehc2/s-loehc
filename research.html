@@ -531,22 +531,46 @@
       fetchPubMed(lastQuery, lastSort, true).then(setUpdated);
     });
 
+    let biorxivLastTerm = 'all';
+
     async function fetchBiorxiv(query, append=false) {
       const { from, to } = getBiorxivDateRange();
       const simpleQuery = simplifyForBiorxiv(query) || 'all';
-      const term = encodeURIComponent(simpleQuery);
-      const url = `https://api.biorxiv.org/details/biorxiv/${from}/${to}/${biorxivCursor}/${term}`;
+      const candidates = simpleQuery === 'all' ? ['all'] : [simpleQuery, 'all'];
       if (!append) biorxivDiv.innerHTML = '';
 
       try {
-        const res = await fetch(url).then(r => r.json());
-        const items = (res && res.collection) || [];
-        const total = Number(res?.messages?.[0]?.total || 0);
-        const count = Number(res?.messages?.[0]?.count || items.length);
+        let data = null;
+        let usedTerm = candidates[0];
+
+        for (const termCandidate of candidates) {
+          const encodedTerm = encodeURIComponent(termCandidate);
+          const url = `https://api.biorxiv.org/details/biorxiv/${from}/${to}/${biorxivCursor}/${encodedTerm}`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            console.warn('biorxiv response not ok', res.status, url);
+            continue;
+          }
+          const json = await res.json();
+          if (json && Array.isArray(json.collection)) {
+            data = json;
+            usedTerm = termCandidate;
+            break;
+          }
+        }
+
+        if (!data) {
+          throw new Error('No data returned (possibly blocked query or empty results)');
+        }
+
+        biorxivLastTerm = usedTerm;
+        const items = data.collection || [];
+        const total = Number(data?.messages?.[0]?.total || 0);
+        const count = Number(data?.messages?.[0]?.count || items.length);
         biorxivLastPageCount = count || items.length || biorxivPageSize;
 
         if (items.length === 0) {
-          biorxivDiv.innerHTML = '<div class="text-gray-500">No results.</div>';
+          biorxivDiv.innerHTML = '<div class="text-gray-500">No results (try simpler keywords).</div>';
           biorxivMoreWrap.classList.add('hidden');
           return;
         }
@@ -586,7 +610,7 @@
         biorxivMoreWrap.classList.toggle('hidden', reachedEnd);
       } catch (err) {
         console.error('biorxiv fetch error', err);
-        biorxivDiv.innerHTML = '<div class="text-red-500">Error fetching bioRxiv/medRxiv results.</div>';
+        biorxivDiv.innerHTML = '<div class="text-red-500">Error fetching bioRxiv/medRxiv results. Try simpler keywords or retry.</div>';
         biorxivMoreWrap.classList.add('hidden');
       }
     }
