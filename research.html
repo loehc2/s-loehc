@@ -103,6 +103,21 @@
         <button id="loadMorePubmed" class="px-4 py-2 rounded-lg border">Load more</button>
       </div>
     </section>
+
+    <!-- bioRxiv / medRxiv Results -->
+    <section class="mb-12">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-gray-800">bioRxiv / medRxiv</h2>
+        <div class="flex items-center gap-3 text-sm text-gray-500">
+          <span>via biorxiv.org API</span>
+          <a href="https://www.biorxiv.org/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open site</a>
+        </div>
+      </div>
+      <div id="biorxiv" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <div id="biorxivMore" class="mt-4 text-center hidden">
+        <button id="loadMoreBiorxiv" class="px-4 py-2 rounded-lg border">Load more</button>
+      </div>
+    </section>
   </main>
 
   <footer class="bg-gray-800 text-white py-6 mt-12">
@@ -403,6 +418,43 @@
     const moreBtnWrap = document.getElementById('pubmedMore');
     const moreBtn = document.getElementById('loadMorePubmed');
     let retstart = 0, retmax = 20, lastQuery = '', lastSort = 'most+recent';
+    const biorxivDiv = document.getElementById('biorxiv');
+    const biorxivMoreWrap = document.getElementById('biorxivMore');
+    const biorxivMoreBtn = document.getElementById('loadMoreBiorxiv');
+    let biorxivCursor = 0, biorxivLastQuery = '', biorxivPageSize = 100, biorxivLastPageCount = 0;
+
+    function escapeHtml(str = '') {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function toDateString(date) {
+      const d = new Date(date);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${m}-${day}`;
+    }
+
+    function normalizeDateForBiorxiv(dateStr) {
+      if (!dateStr) return '';
+      if (dateStr.includes('-')) return dateStr;
+      if (dateStr.includes('/')) {
+        const [y, m = '01', d = '01'] = dateStr.split('/');
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+      return dateStr;
+    }
+
+    function getBiorxivDateRange() {
+      const { mindate, maxdate } = getDateParams();
+      const from = normalizeDateForBiorxiv(mindate) || '2013-01-01'; // service launch ~2013
+      const to = normalizeDateForBiorxiv(maxdate) || toDateString(new Date());
+      return { from, to };
+    }
 
     async function fetchPubMed(query, sort='most+recent', append=false) {
       const { mindate, maxdate } = getDateParams();
@@ -456,12 +508,81 @@
       retstart = 0;
       lastQuery = getQuery();
       lastSort = document.getElementById('sort').value;
-      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+      biorxivCursor = 0;
+      biorxivLastQuery = lastQuery;
+      Promise.all([
+        fetchPubMed(lastQuery, lastSort, false),
+        fetchBiorxiv(biorxivLastQuery, false)
+      ]).then(setUpdated);
     });
 
     moreBtn.addEventListener('click', () => {
       retstart += retmax;
       fetchPubMed(lastQuery, lastSort, true).then(setUpdated);
+    });
+
+    async function fetchBiorxiv(query, append=false) {
+      const { from, to } = getBiorxivDateRange();
+      const term = encodeURIComponent(query);
+      const url = `https://api.biorxiv.org/details/biorxiv/${from}/${to}/${biorxivCursor}/${term}`;
+      if (!append) biorxivDiv.innerHTML = '';
+
+      try {
+        const res = await fetch(url).then(r => r.json());
+        const items = (res && res.collection) || [];
+        const total = Number(res?.messages?.[0]?.total || 0);
+        const count = Number(res?.messages?.[0]?.count || items.length);
+        biorxivLastPageCount = count || items.length || biorxivPageSize;
+
+        if (items.length === 0) {
+          biorxivDiv.innerHTML = '<div class="text-gray-500">No results.</div>';
+          biorxivMoreWrap.classList.add('hidden');
+          return;
+        }
+
+        items.forEach(item => {
+          const title = item.title || '(no title)';
+          const authors = (item.authors || '').replace(/;/g, '; ');
+          const date = item.date || '';
+          const doi = item.doi || '';
+          const versionSuffix = item.version ? `v${item.version}` : '';
+          const serverDomain = item.server === 'medrxiv' ? 'medrxiv' : 'biorxiv';
+          const link = doi ? `https://www.${serverDomain}.org/content/${doi}${versionSuffix}` : `https://www.${serverDomain}.org/`;
+          const category = item.category ? ` · ${item.category}` : '';
+
+          const cardWrapper = document.createElement('div');
+          cardWrapper.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
+          cardWrapper.innerHTML = `
+            <div class="absolute top-3 right-3">
+              <input type="checkbox" class="paper-checkbox w-5 h-5" data-pmid="bio-${escapeHtml(doi)}" 
+                     data-title="${escapeHtml(title)}" 
+                     data-journal="${escapeHtml(serverDomain)}" 
+                     data-date="${escapeHtml(date)}" 
+                     data-authors="${escapeHtml(authors)}" 
+                     data-link="${escapeHtml(link)}">
+            </div>
+            <a href="${link}" target="_blank" rel="noopener" class="block">
+              <div class="text-lg font-semibold text-gray-800 mb-1 pr-8">${escapeHtml(title)}</div>
+              <div class="text-sm text-gray-600">${serverDomain}${category} · ${escapeHtml(date)}</div>
+              <div class="text-sm text-gray-600 truncate">${escapeHtml(authors)}</div>
+              ${doi ? `<div class="mt-2 text-blue-600 text-sm break-all">DOI: ${escapeHtml(doi)}</div>` : ''}
+            </a>
+          `;
+          biorxivDiv.appendChild(cardWrapper);
+        });
+
+        const reachedEnd = total ? (biorxivCursor + biorxivLastPageCount >= total) : (items.length < biorxivLastPageCount);
+        biorxivMoreWrap.classList.toggle('hidden', reachedEnd);
+      } catch (err) {
+        console.error('biorxiv fetch error', err);
+        biorxivDiv.innerHTML = '<div class="text-red-500">Error fetching bioRxiv/medRxiv results.</div>';
+        biorxivMoreWrap.classList.add('hidden');
+      }
+    }
+
+    biorxivMoreBtn.addEventListener('click', () => {
+      biorxivCursor += biorxivLastPageCount || biorxivPageSize;
+      fetchBiorxiv(biorxivLastQuery, true).then(setUpdated);
     });
 
     // 논문 저장 기능
@@ -477,6 +598,11 @@
     }
 
     pubmedDiv.addEventListener('change', (e) => {
+      if (e.target.classList.contains('paper-checkbox')) {
+        updateSaveButton();
+      }
+    });
+    biorxivDiv.addEventListener('change', (e) => {
       if (e.target.classList.contains('paper-checkbox')) {
         updateSaveButton();
       }
@@ -689,7 +815,11 @@
       
       lastQuery = getQuery();
       lastSort  = document.getElementById('sort').value;
-      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+      biorxivLastQuery = lastQuery;
+      Promise.all([
+        fetchPubMed(lastQuery, lastSort, false),
+        fetchBiorxiv(biorxivLastQuery, false)
+      ]).then(setUpdated);
     })();
   </script>
 </body>
