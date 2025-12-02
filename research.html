@@ -456,6 +456,16 @@
       return { from, to };
     }
 
+    function simplifyForBiorxiv(rawQuery) {
+      if (!rawQuery) return '';
+      return rawQuery
+        .replace(/[()"]/g, ' ')
+        .replace(/\bAND\b|\bOR\b|\bNOT\b/gi, ' ')
+        .replace(/[^\w\s-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
     async function fetchPubMed(query, sort='most+recent', append=false) {
       const { mindate, maxdate } = getDateParams();
       const dateParams = mindate ? `&mindate=${mindate}${maxdate ? `&maxdate=${maxdate}` : ''}` : '';
@@ -523,7 +533,8 @@
 
     async function fetchBiorxiv(query, append=false) {
       const { from, to } = getBiorxivDateRange();
-      const term = encodeURIComponent(query);
+      const simpleQuery = simplifyForBiorxiv(query) || 'all';
+      const term = encodeURIComponent(simpleQuery);
       const url = `https://api.biorxiv.org/details/biorxiv/${from}/${to}/${biorxivCursor}/${term}`;
       if (!append) biorxivDiv.innerHTML = '';
 
