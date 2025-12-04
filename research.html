@@ -26,47 +26,64 @@
 
   <main class="container mx-auto px-4 py-8">
     <!-- Controls -->
-    <div class="bg-white rounded-xl shadow p-4 mb-6 grid grid-cols-1 lg:grid-cols-6 gap-3">
-      <input id="query" type="text" class="border rounded-lg px-3 py-2 col-span-2"
-             value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
-             placeholder="Enter search terms"/>
-      <input id="author" type="text" class="border rounded-lg px-3 py-2"
-             placeholder="author"/>
-      <select id="journal" class="border rounded-lg px-3 py-2">
-        <option value="">All Journals</option>
-        <option value="(nature[journal] OR science[journal] OR cell[journal])">
-          CNS
-        </option>
-        <option value='("Molecular Cell"[journal]
-                        OR "The Journal of Cell Biology"[journal]
-                        OR "Nature Immunology"[journal]
-                        OR "Immunity"[journal]
-                        OR "Cell Host & Microbe"[journal]
-                        OR "Nature Reviews Molecular Cell Biology"[journal]
-                        OR "Nature Medicine"[journal]
-                        OR PNAS[journal]
-                        OR "Nature Communications"[journal]
-                        OR "Nature Structural & Molecular Biology"[journal]
-                        OR "Science Translational Medicine"[journal])'>
-          Hi
-        </option>
-      </select>
-      <select id="dateRange" class="border rounded-lg px-3 py-2">
-        <option value="">Any Time</option>
-        <option value="1y">Last 1 year</option>
-        <option value="3y">Last 3 years</option>
-        <option value="5y">Last 5 years</option>
-        <option value="custom">Custom Range</option>
-      </select>
-      <div class="flex gap-1">
-        <input type="date" id="startDate" class="border rounded-lg px-2 py-1 hidden">
-        <input type="date" id="endDate" class="border rounded-lg px-2 py-1 hidden">
+    <div class="bg-white rounded-xl shadow p-4 mb-6 flex flex-col gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 flex-1 min-w-0">
+        <input id="query" type="text" class="border rounded-lg px-3 py-2 lg:col-span-2 w-full"
+               value="(coronavirus OR SARS-CoV-2) AND spike AND antibody response"
+               placeholder="Enter search terms"/>
+        <input id="author" type="text" class="border rounded-lg px-3 py-2 w-full"
+               placeholder="author"/>
+        <select id="journal" class="border rounded-lg px-3 py-2 w-full">
+          <option value="">All Journals</option>
+          <option value="(nature[journal] OR science[journal] OR cell[journal])">
+            CNS
+          </option>
+          <option value='("Molecular Cell"[journal]
+                          OR "The Journal of Cell Biology"[journal]
+                          OR "Nature Immunology"[journal]
+                          OR "Immunity"[journal]
+                          OR "Cell Host & Microbe"[journal]
+                          OR "Nature Reviews Molecular Cell Biology"[journal]
+                          OR "Nature Medicine"[journal]
+                          OR PNAS[journal]
+                          OR "Nature Communications"[journal]
+                          OR "Nature Structural & Molecular Biology"[journal]
+                          OR "Science Translational Medicine"[journal])'>
+            Hi
+          </option>
+        </select>
+        <div class="flex flex-col gap-2 w-full">
+          <select id="dateRange" class="border rounded-lg px-3 py-2">
+            <option value="">Any Time</option>
+            <option value="1y">Last 1 year</option>
+            <option value="3y">Last 3 years</option>
+            <option value="5y">Last 5 years</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          <div class="flex gap-2">
+            <input type="date" id="startDate" class="border rounded-lg px-2 py-1 hidden w-full">
+            <input type="date" id="endDate" class="border rounded-lg px-2 py-1 hidden w-full">
+          </div>
+        </div>
+        <select id="sort" class="border rounded-lg px-3 py-2 w-full">
+          <option value="most+recent" selected>Most Recent</option>
+          <option value="relevance">Relevance</option>
+        </select>
       </div>
-      <select id="sort" class="border rounded-lg px-3 py-2">
-        <option value="most+recent" selected>Most Recent</option>
-        <option value="relevance">Relevance</option>
-      </select>
-      <button id="run" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Search</button>
+      <div class="flex flex-col items-start gap-2">
+        <button id="run" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 w-40">Search</button>
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-sm text-gray-600">Sources:</span>
+          <label class="flex items-center gap-1 text-sm">
+            <input type="checkbox" id="sourcePubmed" class="source-toggle" value="pubmed" checked>
+            <span>PubMed</span>
+          </label>
+          <label class="flex items-center gap-1 text-sm">
+            <input type="checkbox" id="sourceEuropepmc" class="source-toggle" value="europepmc" checked>
+            <span>Europe PMC</span>
+          </label>
+        </div>
+      </div>
     </div>
 
     <p id="updated" class="text-sm text-gray-500 mb-6"></p>
@@ -103,18 +120,19 @@
       </div>
     </section>
 
-  </main>
-
-  <section class="bg-white shadow mt-8 py-6">
-    <div class="container mx-auto px-4 text-center text-sm text-gray-700">
-      <p class="mb-2 font-semibold">Preprint links</p>
-      <div class="flex items-center justify-center gap-4">
-        <a href="https://www.biorxiv.org/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">bioRxiv</a>
-        <span class="text-gray-400">|</span>
-        <a href="https://www.medrxiv.org/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">medRxiv</a>
+    <!-- Europe PMC Results -->
+    <section id="europeSection" class="mb-12">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-gray-800">Europe PMC</h2>
+        <div class="text-sm text-gray-500">Includes PubMed Central content</div>
       </div>
-    </div>
-  </section>
+      <div id="europepmc" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <div id="europeMore" class="mt-4 text-center hidden">
+        <button id="loadMoreEurope" class="px-4 py-2 rounded-lg border">Load more</button>
+      </div>
+    </section>
+
+  </main>
 
   <footer class="bg-gray-800 text-white py-6 mt-12">
     <div class="container mx-auto px-4 text-center">
@@ -370,6 +388,7 @@
     const dateRangeSel = document.getElementById('dateRange');
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
+    const europeSection = document.getElementById('europeSection');
 
     dateRangeSel.addEventListener('change', () => {
       if (dateRangeSel.value === 'custom') {
@@ -413,10 +432,26 @@
     const pubmedDiv = document.getElementById('pubmed');
     const moreBtnWrap = document.getElementById('pubmedMore');
     const moreBtn = document.getElementById('loadMorePubmed');
+    const europeDiv = document.getElementById('europepmc');
+    const europeMoreWrap = document.getElementById('europeMore');
+    const moreBtnEurope = document.getElementById('loadMoreEurope');
     let retstart = 0, retmax = 20, lastQuery = '', lastSort = 'most+recent';
+    let europePage = 1;
+    const EUROPE_PAGE_SIZE = 25;
 
     function escapeHtml(str = '') {
-      return str
+      const s = typeof str === 'string' ? str : (str == null ? '' : String(str));
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(str = '') {
+      const s = typeof str === 'string' ? str : (str == null ? '' : String(str));
+      return s
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -431,21 +466,17 @@
       return `${d.getFullYear()}-${m}-${day}`;
     }
 
-    function normalizeDateForBiorxiv(dateStr) {
+    function normalizeDateForEurope(dateStr) {
       if (!dateStr) return '';
-      if (dateStr.includes('-')) return dateStr;
-      if (dateStr.includes('/')) {
-        const [y, m = '01', d = '01'] = dateStr.split('/');
-        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      }
-      return dateStr;
+      return dateStr.replace(/\//g, '-');
     }
 
-    function getBiorxivDateRange() {
-      const { mindate, maxdate } = getDateParams();
-      const from = normalizeDateForBiorxiv(mindate) || '2013-01-01'; // service launch ~2013
-      const to = normalizeDateForBiorxiv(maxdate) || toDateString(new Date());
-      return { from, to };
+    function getSelectedSources() {
+      return Array.from(document.querySelectorAll('.source-toggle:checked')).map(el => el.value);
+    }
+
+    function updateSectionVisibility(sources) {
+      europeSection.classList.toggle('hidden', !sources.includes('europepmc'));
     }
 
     async function fetchPubMed(query, sort='most+recent', append=false) {
@@ -496,16 +527,127 @@
       });
     }
 
-    document.getElementById('run').addEventListener('click', () => {
-      retstart = 0;
+    function buildEuropeQuery(query) {
+      const { mindate, maxdate } = getDateParams();
+      if (!mindate && !maxdate) return query || '*';
+      const from = normalizeDateForEurope(mindate) || '1900-01-01';
+      const to = normalizeDateForEurope(maxdate) || toDateString(new Date());
+      return `(${query}) AND FIRST_PDATE:[${from} TO ${to}]`;
+    }
+
+    function renderEuropeCard(item) {
+      const title = item.title || '(no title)';
+      const authors = item.authorString || '';
+      const journal = item.journalTitle || item.bookOrReportDetails || item.source || '';
+      const date = item.firstPublicationDate || item.pubYear || '';
+      const doi = item.doi || '';
+      const pmid = item.pmid || item.id || '';
+      const source = item.source || 'EPMC';
+      const idForLink = item.id || pmid || doi || '';
+      const link = idForLink ? `https://europepmc.org/article/${source}/${idForLink}` : (doi ? `https://doi.org/${doi}` : '#');
+      const cardWrapper = document.createElement('div');
+      cardWrapper.className = 'relative bg-white rounded-xl shadow hover:shadow-lg transition p-4';
+      cardWrapper.innerHTML = `
+        <div class="absolute top-3 right-3">
+          <input type="checkbox" class="paper-checkbox w-5 h-5"
+                 data-pmid="${escapeAttr(pmid || `europe-${idForLink}`)}"
+                 data-title="${escapeAttr(title)}"
+                 data-journal="${escapeAttr(journal || 'Europe PMC')}"
+                 data-date="${escapeAttr(date)}"
+                 data-authors="${escapeAttr(authors)}"
+                 data-link="${escapeAttr(link)}">
+        </div>
+        <a href="${link || '#'}" ${link ? 'target="_blank" rel="noopener"' : ''} class="block${link ? '' : ' pointer-events-none opacity-80'}">
+          <div class="text-lg font-semibold text-gray-800 mb-1 pr-8">${escapeHtml(title)}</div>
+          <div class="text-sm text-gray-600">${escapeHtml(journal)}${date ? ' · ' + escapeHtml(date) : ''}</div>
+          <div class="text-sm text-gray-600 truncate">${escapeHtml(authors || 'Unknown authors')}</div>
+          ${pmid ? `<div class="mt-2 text-blue-600 text-sm">ID: ${escapeHtml(pmid)}</div>` : ''}
+          ${doi ? `<div class="text-blue-600 text-sm">DOI: ${escapeHtml(doi)}</div>` : ''}
+        </a>
+      `;
+      europeDiv.appendChild(cardWrapper);
+    }
+
+    async function fetchEuropePMC(query, append=false) {
+      if (!append) {
+        europePage = 1;
+      }
+      const q = buildEuropeQuery(query || '*');
+      const url = `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=${encodeURIComponent(q)}&format=json&pageSize=${EUROPE_PAGE_SIZE}&page=${europePage}`;
+      if (!append) {
+        europeDiv.innerHTML = '';
+      }
+      const resp = await fetch(url).then(r => r.json()).catch(() => null);
+      const items = resp && resp.resultList && Array.isArray(resp.resultList.result) ? resp.resultList.result : [];
+
+      if (!items.length) {
+        if (!append) {
+          const errMsg = resp && resp.error ? `Europe PMC error: ${escapeHtml(resp.error)}` : 'No Europe PMC results.';
+          europeDiv.innerHTML = `<div class="text-gray-500">${errMsg}</div>`;
+        }
+        europeMoreWrap.classList.add('hidden');
+        return;
+      }
+
+      items.forEach(renderEuropeCard);
+      const hasMore = items.length >= EUROPE_PAGE_SIZE;
+      europeMoreWrap.classList.toggle('hidden', !hasMore);
+    }
+
+    async function runSearch(resetPagination = true) {
+      const selectedSources = getSelectedSources();
+      if (selectedSources.length === 0) {
+        alert('최소 한 개 이상의 검색 소스를 선택해주세요.');
+        return;
+      }
+
+      if (resetPagination) {
+        retstart = 0;
+        europePage = 1;
+      }
+
       lastQuery = getQuery();
       lastSort = document.getElementById('sort').value;
-      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+      updateSectionVisibility(selectedSources);
+
+      const tasks = [];
+      if (selectedSources.includes('pubmed')) {
+        tasks.push(fetchPubMed(lastQuery, lastSort, false));
+      } else {
+        pubmedDiv.innerHTML = '';
+        moreBtnWrap.classList.add('hidden');
+      }
+
+      if (selectedSources.includes('europepmc')) {
+        tasks.push(fetchEuropePMC(lastQuery, false));
+      } else {
+        europeDiv.innerHTML = '';
+        europeMoreWrap.classList.add('hidden');
+      }
+
+      await Promise.all(tasks);
+      setUpdated();
+      updateSaveButton();
+    }
+
+    document.getElementById('run').addEventListener('click', () => {
+      runSearch(true);
+    });
+
+    document.querySelectorAll('.source-toggle').forEach(el => {
+      el.addEventListener('change', () => {
+        updateSectionVisibility(getSelectedSources());
+      });
     });
 
     moreBtn.addEventListener('click', () => {
       retstart += retmax;
       fetchPubMed(lastQuery, lastSort, true).then(setUpdated);
+    });
+
+    moreBtnEurope.addEventListener('click', () => {
+      europePage += 1;
+      fetchEuropePMC(lastQuery, true).then(setUpdated);
     });
 
     // 논문 저장 기능
@@ -520,7 +662,7 @@
       return `savedPapers:${auth && auth.currentUser ? auth.currentUser.uid : 'guest'}`;
     }
 
-    pubmedDiv.addEventListener('change', (e) => {
+    document.addEventListener('change', (e) => {
       if (e.target.classList.contains('paper-checkbox')) {
         updateSaveButton();
       }
@@ -731,9 +873,7 @@
       document.getElementById('loginBtn').addEventListener('click', googleLogin);
       document.getElementById('logoutBtn').addEventListener('click', googleLogout);
       
-      lastQuery = getQuery();
-      lastSort  = document.getElementById('sort').value;
-      fetchPubMed(lastQuery, lastSort, false).then(setUpdated);
+      runSearch(true);
     })();
   </script>
 </body>
